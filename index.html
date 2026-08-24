@@ -103,7 +103,8 @@
     background: var(--card-bg); display:flex; align-items:center; justify-content:center;
     font-size:8.5px; color:var(--ink); font-weight:bold; border:1px solid var(--card-line);
   }
-  .opp-count{ font-size:10px; color:var(--muted); margin-left:2px; }
+  .opp-count{ font-size:13px; font-weight:800; color: var(--gold-bright); margin-left:4px; }
+  .opp-count .opp-count-num{ font-size:15px; }
 
   .center{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:10px 0 4px; gap:6px; }
   .pile-wrap{ position:relative; width:130px; height:100px; display:flex; align-items:center; justify-content:center; gap:6px; }
@@ -122,7 +123,21 @@
   .black-suit{ color: var(--ink); }
   .pile-info{ font-size:11px; color:var(--muted); text-align:center; }
   .pile-info b{ color:var(--gold-bright); }
-  .deck-info{ font-size:10.5px; color:var(--muted); text-align:center; }
+  .center-row{ display:flex; align-items:center; justify-content:center; gap:26px; }
+  .deck-wrap{ display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .deck-card{
+    width:62px; height:88px; border-radius:7px;
+    background: repeating-linear-gradient(45deg, #1a4638, #1a4638 4px, #235448 4px, #235448 8px);
+    border:1px solid rgba(255,255,255,0.15); box-shadow:0 3px 8px rgba(0,0,0,0.35), 3px 3px 0 -1px var(--felt-dark), 5px 5px 0 -2px var(--felt-dark);
+  }
+  .deck-count-badge{ font-size:10.5px; color:var(--muted); }
+  @keyframes card-drop{
+    0%{ transform: scale(0.55) translateY(-16px) rotate(-6deg); opacity:0.3; }
+    70%{ transform: scale(1.08) translateY(0) rotate(1deg); opacity:1; }
+    100%{ transform: scale(1) rotate(0deg); }
+  }
+  .pile-card.card-drop{ animation: card-drop 0.32s ease-out; }
+  .fly-card{ position:fixed; pointer-events:none; z-index:9999; }
 
   #message{
     min-height:18px; text-align:center; font-size:12.5px; color:#e9dfc4; font-style:italic; padding:2px 10px;
@@ -250,9 +265,14 @@
     <div class="opponents" id="opponents"></div>
 
     <div class="center">
-      <div class="pile-wrap" id="pile-wrap"></div>
+      <div class="center-row">
+        <div class="deck-wrap" id="deck-wrap">
+          <div class="deck-card"></div>
+          <div class="deck-count-badge" id="deck-count-badge">— left</div>
+        </div>
+        <div class="pile-wrap" id="pile-wrap"></div>
+      </div>
       <div class="pile-info" id="pile-info"></div>
-      <div class="deck-info" id="deck-info"></div>
     </div>
 
     <div class="turn-banner" id="turn-banner">🟢 Your Turn</div>
@@ -457,14 +477,14 @@
     const player = state.players[playerIdx];
     if(state.leftover.length===0){
       pickUpPile(playerIdx);
-      return { burned:false, pickedUp:true };
+      return { burned:false, pickedUp:true, card:null };
     }
     const drawn = state.leftover.pop();
     if(canPlayRank(drawn.rank)){
       state.pile.push(drawn);
       state.message = player.name+' drew the '+drawn.rank+' — plays it straight onto the pile.';
-      if(checkBurn()){ doBurn(player.name, drawn.rank==='10'); return { burned:true, pickedUp:false }; }
-      return { burned:false, pickedUp:false };
+      if(checkBurn()){ doBurn(player.name, drawn.rank==='10'); return { burned:true, pickedUp:false, card:drawn }; }
+      return { burned:false, pickedUp:false, card:drawn };
     } else {
       player.hand = player.hand.concat(state.pile);
       state.pile = [drawn];
@@ -475,8 +495,8 @@
       }
       player.hand = sortHand(player.hand);
       state.message = player.name+' drew the '+drawn.rank+' — too high! Picks up the pile; the '+drawn.rank+' starts a new one'+(matches.length? ' with '+matches.length+' matching card'+(matches.length>1?'s':'')+' from hand.':'.')+' Goes again.';
-      if(checkBurn()){ doBurn(player.name, drawn.rank==='10'); return { burned:true, pickedUp:true }; }
-      return { burned:false, pickedUp:true };
+      if(checkBurn()){ doBurn(player.name, drawn.rank==='10'); return { burned:true, pickedUp:true, card:drawn }; }
+      return { burned:false, pickedUp:true, card:drawn };
     }
   }
 
@@ -594,16 +614,17 @@
   }
 
   // ---- host: handling a message from a connected guest ----
-  function finalizeHostTurn(drawResult, burnCandidate){
-    if(checkWin()){ render(); syncPeers(); return; }
-    if(drawResult && (drawResult.burned || drawResult.pickedUp)){ render(); syncPeers(); return; }
+  function finalizeHostTurn(drawResult, burnCandidate, animate){
+    if(checkWin()){ render(); if(animate) animate(); syncPeers(); return; }
+    if(drawResult && (drawResult.burned || drawResult.pickedUp)){ render(); if(animate) animate(); syncPeers(); return; }
     if(!drawResult && burnCandidate!=null && checkBurn()){
       doBurn(state.players[state.turn].name, burnCandidate==='10');
-      render(); syncPeers();
+      render(); if(animate) animate(); syncPeers();
       return;
     }
     advanceTurn();
     render();
+    if(animate) animate();
     syncPeers();
   }
 
@@ -611,6 +632,7 @@
     if(!state || state.over) return;
     if(state.turn !== seatIdx) return; // ignore anything out of turn
     const player = state.players[seatIdx];
+    const oppEl = oppElBySeat(seatIdx);
 
     if(msg.type==='play'){
       const pool = poolCards(player);
@@ -620,12 +642,12 @@
       if(!cards.every(c=>c.rank===rank) || !canPlayRank(rank)) return;
       playCards(seatIdx, cards);
       state.message = player.name+' played the '+rank+(cards.length>1?' ×'+cards.length:'')+'.';
-      finalizeHostTurn(null, rank);
+      finalizeHostTurn(null, rank, ()=> flyCard(oppEl, elById('pile-wrap'), cards[0], false));
 
     } else if(msg.type==='draw'){
       if(legalPoolRanks(player).length>0) return; // must play if legal
       const result = doDrawFromDeck(seatIdx);
-      finalizeHostTurn(result, null);
+      finalizeHostTurn(result, null, ()=> flyCard(elById('deck-wrap'), result.pickedUp ? oppEl : elById('pile-wrap'), result.pickedUp ? null : result.card, result.pickedUp));
 
     } else if(msg.type==='flip'){
       if(!facedownActive(player)) return;
@@ -636,7 +658,7 @@
         const extra = autoPlayHandMatches(player, card.rank);
         checkOut(player);
         state.message = player.name+' flips a facedown card — the '+card.rank+'. Legal!'+(extra? ' Plus '+extra+' matching card'+(extra>1?'s':'')+' from hand.':'');
-        finalizeHostTurn(null, card.rank);
+        finalizeHostTurn(null, card.rank, ()=> flyCard(oppEl, elById('pile-wrap'), card, false));
       } else {
         player.hand = sortHand(player.hand.concat(state.pile).concat([card]));
         state.pile = [];
@@ -679,17 +701,23 @@
       if(peer){ try{ peer.destroy(); }catch(e){} }
       peer = new Peer(code, { debug: 1 });
       let opened = false;
-      const openTimeout = setTimeout(()=>{
-        if(!opened){
-          console.warn('[TENS] peer.open never fired within 10s — likely blocked by network/firewall');
-          statusEl.textContent = "⚠️ Couldn't reach the connection server. This usually means the WiFi/network is blocking WebRTC. Try mobile data or a different network.";
+      const startedAt = Date.now();
+      const patienceTimer = setInterval(()=>{
+        if(opened){ clearInterval(patienceTimer); return; }
+        const secs = Math.round((Date.now()-startedAt)/1000);
+        if(secs>=45){
+          clearInterval(patienceTimer);
+          console.warn('[TENS] peer.open never fired within 45s — the free PeerJS server is likely slow or unreachable right now');
+          statusEl.textContent = "⚠️ Still couldn't connect after 45s. The free connection server can be slow or flaky — tap Retry, or try again in a minute.";
           statusEl.className = 'conn-status error';
           retryBtn.style.display = 'block';
+        } else if(secs>=10){
+          statusEl.textContent = 'Still connecting… ('+secs+'s) — the free server can be slow sometimes.';
         }
-      }, 10000);
+      }, 1000);
       peer.on('open', id=>{
         opened = true;
-        clearTimeout(openTimeout);
+        clearInterval(patienceTimer);
         document.getElementById('host-code').textContent = id.replace('TENS','');
         const link = location.origin + location.pathname + '?join=' + id;
         document.getElementById('share-link').value = link;
@@ -712,7 +740,7 @@
         });
       });
       peer.on('error', err=>{
-        clearTimeout(openTimeout);
+        clearInterval(patienceTimer);
         console.error('[TENS] peer error', err);
         if(err.type==='unavailable-id'){
           startHosting(); // room code collision — extremely rare, just retry with a new code
@@ -758,22 +786,28 @@
       if(peer){ try{ peer.destroy(); }catch(e){} }
       peer = new Peer({ debug: 1 });
       let opened = false;
-      const openTimeout = setTimeout(()=>{
-        if(!opened){
-          console.warn('[TENS] peer.open never fired within 10s — likely blocked by network/firewall');
-          statusEl.textContent = "⚠️ Couldn't reach the connection server. This usually means the WiFi/network is blocking WebRTC. Try mobile data or a different network.";
+      const startedAt = Date.now();
+      const patienceTimer = setInterval(()=>{
+        if(opened){ clearInterval(patienceTimer); return; }
+        const secs = Math.round((Date.now()-startedAt)/1000);
+        if(secs>=45){
+          clearInterval(patienceTimer);
+          console.warn('[TENS] peer.open never fired within 45s — the free PeerJS server is likely slow or unreachable right now');
+          statusEl.textContent = "⚠️ Still couldn't connect after 45s. The free connection server can be slow or flaky — try again in a minute.";
           statusEl.className = 'conn-status error';
+        } else if(secs>=10){
+          statusEl.textContent = 'Still connecting… ('+secs+'s) — the free server can be slow sometimes.';
         }
-      }, 10000);
+      }, 1000);
       peer.on('open', ()=>{
         opened = true;
-        clearTimeout(openTimeout);
+        clearInterval(patienceTimer);
         statusEl.textContent = 'Connecting to room '+code.replace('TENS','')+'…';
         hostConn = peer.connect(code);
         const connTimeout = setTimeout(()=>{
           statusEl.textContent = "⚠️ Couldn't reach that room. Double-check the code with the host and try again.";
           statusEl.className = 'conn-status error';
-        }, 8000);
+        }, 15000);
         hostConn.on('open', ()=>{ clearTimeout(connTimeout); showScreen('guest-waiting'); });
         hostConn.on('error', err=>{
           clearTimeout(connTimeout);
@@ -785,7 +819,7 @@
         hostConn.on('close', ()=>{ if(!state || !state.over) alert('Lost connection to the host.'); });
       });
       peer.on('error', err=>{
-        clearTimeout(openTimeout);
+        clearInterval(patienceTimer);
         console.error('[TENS] peer error', err);
         statusEl.textContent = '⚠️ Could not connect: '+err.type;
         statusEl.className = 'conn-status error';
@@ -846,20 +880,24 @@
       return;
     }
 
+    const sourceEls = selectedCards.map(c=>cardElByDataId(c.id)).filter(Boolean);
     playCards(mySeat, selectedCards);
     state.selected = [];
     state.message = player.name+' played the '+rank+(selectedCards.length>1? ' ×'+selectedCards.length:'')+'.';
-    if(checkWin()){ render(); if(netMode==='host') syncPeers(); return; }
+    const animatePlay = ()=> sourceEls.forEach((el,i)=> setTimeout(()=> flyCard(el, elById('pile-wrap'), selectedCards[i]), i*40));
+    if(checkWin()){ render(); animatePlay(); if(netMode==='host') syncPeers(); return; }
     if(checkBurn()){
       doBurn(player.name, rank==='10');
       render();
+      animatePlay();
       if(netMode==='host') syncPeers();
       return;
     }
     advanceTurn();
     render();
+    animatePlay();
     if(netMode==='host') syncPeers();
-    if(netMode==='offline') setTimeout(runBotTurnLoop, 700);
+    if(netMode==='offline') setTimeout(runBotTurnLoop, 1300);
   }
 
   function humanDraw(){
@@ -877,12 +915,15 @@
 
     state.selected = [];
     const result = doDrawFromDeck(mySeat);
-    if(checkWin()){ render(); if(netMode==='host') syncPeers(); return; }
-    if(result.burned || result.pickedUp){ render(); if(netMode==='host') syncPeers(); return; }
+    const deckEl = elById('deck-wrap');
+    const animateDraw = ()=> flyCard(deckEl, result.pickedUp ? elById('hand-section') : elById('pile-wrap'), result.card, false);
+    if(checkWin()){ render(); animateDraw(); if(netMode==='host') syncPeers(); return; }
+    if(result.burned || result.pickedUp){ render(); animateDraw(); if(netMode==='host') syncPeers(); return; }
     advanceTurn();
     render();
+    animateDraw();
     if(netMode==='host') syncPeers();
-    if(netMode==='offline') setTimeout(runBotTurnLoop, 700);
+    if(netMode==='offline') setTimeout(runBotTurnLoop, 1300);
   }
 
   function autoPlayHandMatches(player, rank){
@@ -908,22 +949,26 @@
 
     const i = Math.floor(Math.random()*player.facedown.length);
     const card = player.facedown.splice(i,1)[0];
+    const fdEl = elById('facedown-row');
     if(canPlayRank(card.rank)){
       state.pile.push(card);
       const extra = autoPlayHandMatches(player, card.rank);
       checkOut(player);
       state.message = 'You flipped the '+card.rank+' — legal! It\'s in the pile'+(extra? ', plus '+extra+' matching card'+(extra>1?'s':'')+' from your hand.':'.');
-      if(checkWin()){ render(); if(netMode==='host') syncPeers(); return; }
-      if(checkBurn()){ doBurn('You', card.rank==='10'); render(); if(netMode==='host') syncPeers(); return; }
+      const animateFlip = ()=> flyCard(fdEl, elById('pile-wrap'), card, false);
+      if(checkWin()){ render(); animateFlip(); if(netMode==='host') syncPeers(); return; }
+      if(checkBurn()){ doBurn('You', card.rank==='10'); render(); animateFlip(); if(netMode==='host') syncPeers(); return; }
       advanceTurn();
       render();
+      animateFlip();
       if(netMode==='host') syncPeers();
-      if(netMode==='offline') setTimeout(runBotTurnLoop, 700);
+      if(netMode==='offline') setTimeout(runBotTurnLoop, 1300);
     } else {
       player.hand = sortHand(player.hand.concat([card]).concat(state.pile));
       state.pile = [];
       state.message = 'You flipped the '+card.rank+' — too high! Picked up everything — you go again.';
       render(); // turn stays with you; you're back in the hand/face-up pool
+      flyCard(fdEl, elById('hand-section'), card, false);
       if(netMode==='host') syncPeers();
     }
   }
@@ -982,52 +1027,114 @@
     if(phase==='facedown'){
       const i = Math.floor(Math.random()*player.facedown.length);
       const card = player.facedown.splice(i,1)[0];
+      const oppEl = oppElBySeat(idx);
       if(canPlayRank(card.rank)){
         state.pile.push(card);
         const extra = autoPlayHandMatches(player, card.rank);
         checkOut(player);
         state.message = player.name+' flips a facedown card — the '+card.rank+'. Legal!'+(extra? ' Plus '+extra+' matching card'+(extra>1?'s':'')+' from hand.':'');
-        if(checkWin()){ render(); return; }
-        if(checkBurn()){ doBurn(player.name, card.rank==='10'); render(); return setTimeout(runBotTurnLoop, 800); }
+        if(checkWin()){ render(); flyCard(oppEl, elById('pile-wrap'), card, false); return; }
+        if(checkBurn()){ doBurn(player.name, card.rank==='10'); render(); flyCard(oppEl, elById('pile-wrap'), card, false); return setTimeout(runBotTurnLoop, 1300); }
         advanceTurn();
         render();
-        return setTimeout(runBotTurnLoop, 800);
+        flyCard(oppEl, elById('pile-wrap'), card, false);
+        return setTimeout(runBotTurnLoop, 1300);
       } else {
         player.hand = player.hand.concat(state.pile);
         state.pile = [];
         state.message = player.name+' flips the '+card.rank+' — too high, picks up the pile and goes again.';
         render();
-        return setTimeout(runBotTurnLoop, 800); // turn stays with this bot
+        return setTimeout(runBotTurnLoop, 1300); // turn stays with this bot
       }
     }
 
     if(phase==='done'){ advanceTurn(); return setTimeout(runBotTurnLoop, 300); }
 
     const move = botChooseMove(player);
+    const oppEl = oppElBySeat(idx);
     if(!move){
       const result = doDrawFromDeck(idx);
-      if(checkWin()){ render(); return; }
-      if(result.burned || result.pickedUp){ render(); return setTimeout(runBotTurnLoop, 800); } // goes again
+      const animateDraw = ()=> flyCard(elById('deck-wrap'), result.pickedUp ? oppEl : elById('pile-wrap'), result.pickedUp ? null : result.card, result.pickedUp);
+      if(checkWin()){ render(); animateDraw(); return; }
+      if(result.burned || result.pickedUp){ render(); animateDraw(); return setTimeout(runBotTurnLoop, 1300); } // goes again
       advanceTurn();
       render();
-      return setTimeout(runBotTurnLoop, 800);
+      animateDraw();
+      return setTimeout(runBotTurnLoop, 1300);
     }
     playCards(idx, move.cards);
     state.message = player.name+' plays the '+move.rank+(move.cards.length>1?' ×'+move.cards.length:'')+'.';
-    if(checkWin()){ render(); return; }
+    const animatePlay = ()=> flyCard(oppEl, elById('pile-wrap'), move.cards[0], false);
+    if(checkWin()){ render(); animatePlay(); return; }
     if(checkBurn()){
       doBurn(player.name, move.rank==='10');
       render();
-      return setTimeout(runBotTurnLoop, 800);
+      animatePlay();
+      return setTimeout(runBotTurnLoop, 1300);
     }
     advanceTurn();
     render();
-    return setTimeout(runBotTurnLoop, 800);
+    animatePlay();
+    return setTimeout(runBotTurnLoop, 1300);
   }
 
   // ---------- RENDER ----------
   // ---- turn alert: banner, tab title, and a beep on the moment it becomes your turn ----
   let wasMyTurn = false;
+  let lastPileTopId = null;
+
+  // ---- flying-card animation: clones a card visually from one element's position to another's ----
+  function flyCard(fromEl, toEl, card, faceDown){
+    if(!fromEl || !toEl) return;
+    const fromR = fromEl.getBoundingClientRect();
+    const toR = toEl.getBoundingClientRect();
+    if(fromR.width===0 || toR.width===0) return;
+
+    const w = Math.max(fromR.width, 44), h = Math.max(fromR.height, 62);
+    const startX = fromR.left + fromR.width/2 - w/2;
+    const startY = fromR.top + fromR.height/2 - h/2;
+    const endX = toR.left + toR.width/2 - w/2;
+    const endY = toR.top + toR.height/2 - h/2;
+
+    const clone = document.createElement('div');
+    clone.className = 'pcard fly-card ' + (faceDown ? 'facedown-back' : (card && card.color==='red'?'red-suit':'black-suit'));
+    if(!faceDown && card){
+      clone.innerHTML = '<div class="rank">'+card.rank+'</div><div class="suit">'+card.suit+'</div>';
+    }
+    clone.style.left = startX+'px';
+    clone.style.top = startY+'px';
+    clone.style.width = w+'px';
+    clone.style.height = h+'px';
+    document.body.appendChild(clone);
+
+    // arc flight: a control point lifted above the midpoint gives a natural "tossed" curve
+    const dist = Math.hypot(endX-startX, endY-startY);
+    const lift = Math.min(90, Math.max(35, dist*0.35));
+    const midX = (startX+endX)/2;
+    const midY = (startY+endY)/2 - lift;
+    const spin = (Math.random()<0.5?-1:1) * (10 + Math.random()*14);
+
+    const duration = 1100;
+    const t0 = performance.now();
+    function step(now){
+      let t = Math.min(1, (now-t0)/duration);
+      const ease = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; // ease-in-out
+      const x = (1-ease)*(1-ease)*startX + 2*(1-ease)*ease*midX + ease*ease*endX;
+      const y = (1-ease)*(1-ease)*startY + 2*(1-ease)*ease*midY + ease*ease*endY;
+      const rot = spin*Math.sin(Math.PI*ease);
+      const scale = 1 + 0.12*Math.sin(Math.PI*ease);
+      clone.style.transform = 'translate('+(x-startX)+'px,'+(y-startY)+'px) rotate('+rot+'deg) scale('+scale+')';
+      clone.style.opacity = t>0.85 ? String(1-(t-0.85)/0.15*0.4) : '1';
+      clone.style.boxShadow = '0 '+(6+10*Math.sin(Math.PI*ease))+'px '+(10+16*Math.sin(Math.PI*ease))+'px rgba(0,0,0,'+(0.25+0.2*Math.sin(Math.PI*ease))+')';
+      if(t<1){ requestAnimationFrame(step); } else { clone.remove(); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function elById(id){ return document.getElementById(id); }
+  function cardElByDataId(id){ return document.querySelector('.pcard[data-id="'+id+'"]'); }
+  function oppElBySeat(seatIdx){ return document.querySelector('.opp[data-seat="'+seatIdx+'"]'); }
+
   function beep(){
     try{
       const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -1062,31 +1169,37 @@
       const p = state.players[i];
       const div = document.createElement('div');
       div.className = 'opp'+(state.turn===i? ' active-turn':'');
+      div.dataset.seat = i;
       let faceupHtml = p.faceup.map(c=>'<div class="mini-card face '+(c.color==='red'?'red-suit':'black-suit')+'">'+c.rank+'</div>').join('');
       let facedownHtml = '';
       for(let k=0;k<p.facedown.length;k++) facedownHtml += '<div class="mini-card"></div>';
       div.innerHTML = '<div class="opp-name">'+p.name+(p.out? ' 🏆':'')+'</div>'+
         '<div class="opp-zone">'+facedownHtml+'</div>'+
         '<div class="opp-zone">'+faceupHtml+'</div>'+
-        '<div class="opp-count">hand: '+p.hand.length+'</div>';
+        '<div class="opp-count">hand: <span class="opp-count-num">'+p.hand.length+'</span></div>';
       oppEl.appendChild(div);
     }
 
     const pileWrap = document.getElementById('pile-wrap');
+    let newTopId = null;
     if(state.pile.length===0){
       pileWrap.innerHTML = '<div class="pile-empty">empty<br>pile</div>';
     } else {
       const top = state.pile[state.pile.length-1];
+      newTopId = top.id + ':' + state.pile.length;
       let runCount = 1;
       for(let i=state.pile.length-2; i>=0; i--){
         if(state.pile[i].rank===top.rank) runCount++; else break;
       }
-      const cardHtml = '<div class="pile-card '+(top.color==='red'?'red-suit':'black-suit')+'"><div class="rank">'+top.rank+'</div><div class="suit">'+top.suit+'</div></div>';
+      const dropClass = (newTopId !== lastPileTopId) ? ' card-drop' : '';
+      const cardHtml = '<div class="pile-card'+dropClass+' '+(top.color==='red'?'red-suit':'black-suit')+'"><div class="rank">'+top.rank+'</div><div class="suit">'+top.suit+'</div></div>';
       const countHtml = runCount>1 ? '<div class="pile-count">×'+runCount+'</div>' : '';
       pileWrap.innerHTML = cardHtml + countHtml;
     }
+    lastPileTopId = newTopId;
     document.getElementById('pile-info').innerHTML = state.pile.length+' card'+(state.pile.length===1?'':'s')+' in pile'+(state.pile.length? ' — play <b>'+state.pile[state.pile.length-1].rank+'</b> or lower (10s always OK)':'');
-    document.getElementById('deck-info').textContent = 'Deck: '+state.leftover.length+' card'+(state.leftover.length===1?'':'s')+' left to draw';
+    document.getElementById('deck-count-badge').textContent = state.leftover.length+' left';
+    document.getElementById('deck-wrap').style.visibility = state.leftover.length>0 ? 'visible' : 'hidden';
 
     document.getElementById('message').textContent = state.message + (netMode==='guest' && awaitingAck ? ' (waiting on host…)' : '');
 
@@ -1121,6 +1234,7 @@
       const clickable = poolAct && canAct;
       el.className = 'pcard '+(c.color==='red'?'red-suit':'black-suit')+(selected?' selected':'')+(!clickable?' disabled':'');
       el.innerHTML = '<div class="rank">'+c.rank+'</div><div class="suit">'+c.suit+'</div>';
+      el.dataset.id = c.id;
       if(clickable) el.onclick = ()=> humanToggleSelect(c.id);
       fuRow.appendChild(el);
     });
@@ -1133,6 +1247,7 @@
       const clickable = poolAct && canAct;
       el.className = 'pcard '+(c.color==='red'?'red-suit':'black-suit')+(selected?' selected':'')+(!clickable?' disabled':'');
       el.innerHTML = '<div class="rank">'+c.rank+'</div><div class="suit">'+c.suit+'</div>';
+      el.dataset.id = c.id;
       if(clickable) el.onclick = ()=> humanToggleSelect(c.id);
       handRow.appendChild(el);
     });
@@ -1228,7 +1343,7 @@
     mySeat = 0;
     showScreen('game');
     newGame(chosenOpponents);
-    if(state.turn!==0) setTimeout(runBotTurnLoop, 700);
+    if(state.turn!==0) setTimeout(runBotTurnLoop, 1300);
   };
 
   // ---- online: host ----
