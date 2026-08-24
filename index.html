@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Tens</title>
+<style>
+  :root{
+    --felt: #0f3d2e;
+    --felt-dark: #0a2921;
+    --felt-line: rgba(255,255,255,0.08);
+    --card-bg: #faf6ee;
+    --card-line: #d8cfb8;
+    --ink: #1c2b24;
+    --gold: #c9a24b;
+    --gold-bright: #e9c869;
+    --red: #a4342a;
+    --muted: #6f8177;
+    --danger: #8c3a2e;
+    --ok: #3d7a56;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: radial-gradient(ellipse at 50% -10%, #14503c 0%, var(--felt) 45%, var(--felt-dark) 100%);
+    font-family: 'Georgia', 'Iowan Old Style', serif;
+    color:#f2ede1;
+    overflow-x:hidden;
+  }
+  #app{ max-width:480px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; padding:10px 10px 22px; }
+
+  .brand{ text-align:center; padding:10px 0 4px; }
+  .brand h1{
+    font-family: 'Palatino', 'Georgia', serif;
+    font-size:28px; letter-spacing:4px; margin:0; font-weight:400;
+    color: var(--gold-bright);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.4);
+  }
+  .brand .sub{ font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-top:2px;}
+
+  #mode-select, #setup, #online-menu, #host-lobby, #guest-join, #guest-waiting{
+    flex:1; display:none; flex-direction:column; justify-content:center; gap:14px; padding:20px 6px;
+  }
+  #mode-select{ display:flex; }
+  .back-link{
+    align-self:flex-start; background:none; border:none; color:var(--gold-bright); font-size:13px;
+    cursor:pointer; font-family:inherit; padding:4px 0;
+  }
+  .room-code{
+    text-align:center; font-size:40px; letter-spacing:8px; font-weight:bold; color:var(--gold-bright);
+    background: rgba(0,0,0,0.25); border:1px solid var(--felt-line); border-radius:10px; padding:14px 0;
+  }
+  .lobby-list{ display:flex; flex-direction:column; gap:6px; }
+  .lobby-row{
+    background: rgba(0,0,0,0.2); border:1px solid var(--felt-line); border-radius:8px; padding:8px 12px; font-size:13px; color:#e8e2d2;
+  }
+  .code-input{
+    font-size:26px; letter-spacing:6px; text-align:center; text-transform:uppercase; padding:12px; border-radius:8px;
+    border:1px solid var(--gold); background: rgba(0,0,0,0.25); color:#f2ede1; font-family:inherit;
+  }
+  .share-link-row{ display:flex; gap:6px; align-items:center; }
+  .share-link-input{
+    flex:1; font-size:11.5px; letter-spacing:0; text-transform:none; padding:10px; text-align:left;
+  }
+  .copy-btn{ width:auto; flex-shrink:0; padding:10px 14px; font-size:12.5px; margin-top:0; }
+  .conn-status{ text-align:center; font-size:12px; color: var(--muted); min-height:16px; }
+  .conn-status.error{ color: var(--danger); font-weight:bold; }
+  .conn-status.ok{ color: var(--ok); }
+  .rule-card{
+    background: rgba(0,0,0,0.22); border:1px solid var(--felt-line); border-radius:10px;
+    padding:14px 16px; font-size:13.5px; line-height:1.55; color:#e8e2d2;
+  }
+  .rule-card b{ color: var(--gold-bright); font-weight:600; }
+  .opt-label{ font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted); margin-bottom:8px; text-align:center;}
+  .opt-row{ display:flex; gap:8px; justify-content:center; }
+  .opt-btn{
+    flex:1; max-width:90px; padding:12px 0; border-radius:8px; border:1px solid var(--gold);
+    background:transparent; color:var(--gold-bright); font-size:16px; font-family:inherit; cursor:pointer;
+    transition: all .15s;
+  }
+  .opt-btn.selected{ background: var(--gold); color:#241a08; font-weight:bold; }
+  .go-btn{
+    margin-top:6px; padding:14px; border-radius:10px; border:none; background: linear-gradient(180deg,var(--gold-bright),var(--gold));
+    color:#241a08; font-size:16px; font-weight:bold; letter-spacing:1px; cursor:pointer; font-family:inherit;
+  }
+  .go-btn:active{ transform: scale(0.98); }
+
+  #game{ display:none; flex:1; flex-direction:column; gap:6px; }
+
+  .opponents{ display:flex; flex-direction:column; gap:6px; }
+  .opp{
+    background: rgba(0,0,0,0.2); border-radius:8px; padding:6px 10px; display:flex; align-items:center;
+    gap:8px; border:1px solid var(--felt-line);
+  }
+  .opp.active-turn{ border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+  .opp-name{ font-size:12.5px; color:#dcd5c2; width:52px; flex-shrink:0; }
+  .opp-zone{ display:flex; gap:3px; align-items:center; }
+  .mini-card{
+    width:16px; height:22px; border-radius:2px; background: linear-gradient(135deg,#3a5a4e,#294539);
+    border:1px solid rgba(255,255,255,0.15);
+  }
+  .mini-card.face{
+    background: var(--card-bg); display:flex; align-items:center; justify-content:center;
+    font-size:8.5px; color:var(--ink); font-weight:bold; border:1px solid var(--card-line);
+  }
+  .opp-count{ font-size:10px; color:var(--muted); margin-left:2px; }
+
+  .center{ display:flex; flex-direction:column; align-items:center; justify-content:center; padding:10px 0 4px; gap:6px; }
+  .pile-wrap{ position:relative; width:130px; height:100px; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .pile-card{
+    width:62px; height:88px; border-radius:7px; background:var(--card-bg); border:1px solid var(--card-line);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.35);
+  }
+  .pile-card .rank{ font-size:26px; font-weight:bold; }
+  .pile-card .suit{ font-size:16px; margin-top:-4px; }
+  .pile-count{ font-size:32px; font-weight:900; color: var(--gold-bright); text-shadow: 0 2px 4px rgba(0,0,0,0.5); line-height:1; }
+  .pile-empty{
+    width:62px; height:88px; border-radius:7px; border:2px dashed rgba(255,255,255,0.2);
+    display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--muted); text-align:center;
+  }
+  .red-suit{ color: var(--red); }
+  .black-suit{ color: var(--ink); }
+  .pile-info{ font-size:11px; color:var(--muted); text-align:center; }
+  .pile-info b{ color:var(--gold-bright); }
+  .deck-info{ font-size:10.5px; color:var(--muted); text-align:center; }
+
+  #message{
+    min-height:18px; text-align:center; font-size:12.5px; color:#e9dfc4; font-style:italic; padding:2px 10px;
+  }
+  .turn-banner{
+    display:none; text-align:center; font-size:15px; font-weight:bold; letter-spacing:1px; color:#241a08;
+    background: linear-gradient(180deg,var(--gold-bright),var(--gold)); border-radius:8px; padding:8px 10px; margin:2px 0;
+    animation: pulse-glow 1.4s ease-in-out infinite;
+  }
+  .turn-banner.show{ display:block; }
+  @keyframes pulse-glow{
+    0%,100%{ box-shadow:0 0 0 0 rgba(233,200,105,0.55); }
+    50%{ box-shadow:0 0 0 8px rgba(233,200,105,0); }
+  }
+
+  .player-area{ margin-top:auto; display:flex; flex-direction:column; gap:8px; padding-top:6px; }
+  .zone-label{ font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted); margin-bottom:3px; }
+  .zone-row{ display:flex; gap:5px; flex-wrap:wrap; min-height:60px; align-items:flex-end; }
+
+  .pcard{
+    width:42px; height:60px; border-radius:5px; background:var(--card-bg); border:1.5px solid var(--card-line);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: transform .1s;
+    flex-shrink:0;
+  }
+  .pcard .rank{ font-size:16px; font-weight:bold; }
+  .pcard .suit{ font-size:11px; margin-top:-2px; }
+  .pcard.selected{ transform: translateY(-8px); border-color: var(--gold); box-shadow:0 0 0 2px var(--gold), 0 4px 8px rgba(0,0,0,0.4); }
+  .pcard.disabled{ opacity:0.35; cursor:default; }
+  .pcard.facedown-back{
+    background: repeating-linear-gradient(45deg, #1a4638, #1a4638 4px, #235448 4px, #235448 8px);
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  .actions{ display:flex; gap:8px; margin-top:8px; }
+  .act-btn{
+    flex:1; padding:12px; border-radius:9px; border:none; font-size:14px; font-weight:bold; font-family:inherit;
+    cursor:pointer; letter-spacing:0.5px;
+  }
+  .act-btn.play{ background: linear-gradient(180deg,var(--ok),#2c5c40); color:#eafff0; }
+  .act-btn.play:disabled{ background:#2c3a33; color:#6f8177; cursor:default; }
+  .act-btn.draw{ background: linear-gradient(180deg,var(--danger),#6e2a20); color:#ffece8; }
+  .act-btn.draw:disabled{ background:#3a2a26; color:#8a746e; cursor:default; }
+  .act-btn:active:not(:disabled){ transform: scale(0.97); }
+
+  #gameover{
+    display:none; position:fixed; inset:0; background:rgba(5,15,10,0.9); z-index:20;
+    align-items:center; justify-content:center; flex-direction:column; gap:16px; padding:20px; text-align:center;
+  }
+  #gameover h2{ color:var(--gold-bright); font-size:26px; margin:0; }
+  #gameover p{ color:#e8e2d2; font-size:14px; margin:0; }
+  .score-table{ border-collapse:collapse; font-size:13px; color:#e8e2d2; width:100%; max-width:320px; }
+  .score-table th{ font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); padding:4px 8px; border-bottom:1px solid var(--felt-line); text-align:right; }
+  .score-table th:first-child{ text-align:left; }
+  .score-table td{ padding:5px 8px; border-bottom:1px solid rgba(255,255,255,0.06); text-align:right; }
+  .score-table td:first-child{ text-align:left; color:var(--gold-bright); }
+  .score-note{ font-size:11px; color:var(--muted); }
+  .reset-link{ background:none; border:none; color:var(--muted); font-size:11px; text-decoration:underline; cursor:pointer; font-family:inherit; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="brand">
+    <h1>TENS</h1>
+    <div class="sub">house rules · shedding game</div>
+  </div>
+
+  <div id="mode-select">
+    <div class="rule-card">
+      <b>House rules recap:</b> match or go lower, never higher. Hand and face-up cards playable any time; face-down unlocks the instant your 4 face-up cards are gone. Tens and four-of-a-kind burn the pile. Can't play? Draw from the deck instead of a forced pickup — and if you do have to pick up, you go again. 10s cost 50 points if left in hand at game end, face cards cost 10, others face value.
+    </div>
+    <button class="go-btn" id="vs-computer-btn">Play vs Computer</button>
+    <button class="go-btn" id="play-online-btn">Play Online</button>
+  </div>
+
+  <div id="setup">
+    <button class="back-link" id="setup-back-btn">← Back</button>
+    <div>
+      <div class="opt-label">Opponents</div>
+      <div class="opt-row" id="opp-count-row">
+        <button class="opt-btn selected" data-n="1">1</button>
+        <button class="opt-btn" data-n="2">2</button>
+        <button class="opt-btn" data-n="3">3</button>
+      </div>
+    </div>
+    <button class="go-btn" id="start-btn">Deal Me In</button>
+  </div>
+
+  <div id="online-menu">
+    <button class="back-link" id="online-back-btn">← Back</button>
+    <div class="rule-card">Host a room and share the 4-letter code, or join a friend's room. Everyone needs to keep this page open for the whole game — closing it drops your seat.</div>
+    <button class="go-btn" id="host-game-btn">Host a Game</button>
+    <button class="go-btn" id="join-game-btn">Join a Game</button>
+  </div>
+
+  <div id="host-lobby">
+    <button class="back-link" id="host-lobby-back-btn">← Cancel</button>
+    <div class="opt-label">Room code</div>
+    <div class="room-code" id="host-code">…</div>
+    <div class="conn-status" id="host-status">Connecting to room server…</div>
+    <button class="go-btn" id="host-retry-btn" style="display:none;">Retry</button>
+    <div class="rule-card">Share this code with up to 3 friends, or send them the link below — it fills the code in for them automatically.</div>
+    <div class="share-link-row">
+      <input type="text" id="share-link" class="code-input share-link-input" readonly>
+      <button class="go-btn copy-btn" id="copy-link-btn">Copy Link</button>
+    </div>
+    <div id="lobby-players" class="lobby-list"></div>
+    <button class="go-btn" id="host-start-btn" disabled>Start Game</button>
+  </div>
+
+  <div id="guest-join">
+    <button class="back-link" id="guest-back-btn">← Back</button>
+    <div class="opt-label">Enter room code</div>
+    <input type="text" id="join-code-input" class="code-input" placeholder="ABCD" maxlength="8" autocapitalize="characters">
+    <button class="go-btn" id="join-connect-btn">Connect</button>
+    <div class="conn-status" id="guest-status"></div>
+  </div>
+
+  <div id="guest-waiting">
+    <button class="back-link" id="guest-waiting-back-btn">← Cancel</button>
+    <div class="rule-card" style="text-align:center;">Connected! Waiting for the host to start the game…</div>
+  </div>
+
+  <div id="game">
+    <div class="opponents" id="opponents"></div>
+
+    <div class="center">
+      <div class="pile-wrap" id="pile-wrap"></div>
+      <div class="pile-info" id="pile-info"></div>
+      <div class="deck-info" id="deck-info"></div>
+    </div>
+
+    <div class="turn-banner" id="turn-banner">🟢 Your Turn</div>
+    <div id="message"></div>
+
+    <div class="player-area">
+      <div id="facedown-section">
+        <div class="zone-label">Your face-down cards</div>
+        <div class="zone-row" id="facedown-row"></div>
+      </div>
+      <div id="faceup-section">
+        <div class="zone-label">Your face-up cards</div>
+        <div class="zone-row" id="faceup-row"></div>
+      </div>
+      <div id="hand-section">
+        <div class="zone-label">Your hand</div>
+        <div class="zone-row" id="hand-row"></div>
+      </div>
+
+      <div class="actions">
+        <button class="act-btn play" id="play-btn" disabled>Play Selected</button>
+        <button class="act-btn draw" id="draw-btn" disabled>Draw from Deck</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="gameover">
+  <h2 id="go-title">Game Over</h2>
+  <p id="go-text"></p>
+  <div class="score-note">Points are a penalty for cards left over — lower is better. 10s cost 50, face cards cost 10, others cost face value.</div>
+  <div id="go-scores"></div>
+  <button class="go-btn" id="replay-btn" style="max-width:200px;">Play Again</button>
+  <button class="reset-link" id="reset-scores-btn">Reset saved totals</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';document.head.appendChild(s);"></script>
+<script>
+(function(){
+  "use strict";
+
+  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const RANK_VALUE = {}; RANKS.forEach((r,i)=> RANK_VALUE[r]=i+1); // A=1 ... K=13
+  const SUITS = [
+    {sym:'♠', color:'black'}, {sym:'♥', color:'red'}, {sym:'♦', color:'red'}, {sym:'♣', color:'black'}
+  ];
+
+  function pointValue(rank){
+    if(rank==='10') return 50;
+    if(rank==='J'||rank==='Q'||rank==='K') return 10;
+    if(rank==='A') return 1;
+    return parseInt(rank,10);
+  }
+
+  // ---- cumulative scores, persisted in this browser via localStorage ----
+  const SCORE_KEY = 'tensCumulativeScores_v1';
+  function loadCumulative(){
+    try{ const raw = localStorage.getItem(SCORE_KEY); return raw? JSON.parse(raw) : {}; }
+    catch(e){ return {}; }
+  }
+  function saveCumulative(obj){
+    try{ localStorage.setItem(SCORE_KEY, JSON.stringify(obj)); } catch(e){}
+  }
+  let cumulativeScores = loadCumulative();
+
+  // ---- networking mode ----
+  let netMode = 'offline'; // 'offline' | 'host' | 'guest'
+  let mySeat = 0;
+  let peer = null;
+  let hostConn = null;      // guest's connection to the host
+  let guestConns = [];      // host's connections, in join order (seat 1,2,3)
+  let awaitingAck = false;  // guest UI lock while a request is in flight
+  let roundScored = false;  // guest-side guard so cumulative points are only added once per game
+
+  let state = null;
+
+  function buildDeck(numDecks){
+    const deck = [];
+    for(let d=0; d<numDecks; d++){
+      for(const s of SUITS){
+        for(const r of RANKS){
+          deck.push({rank:r, suit:s.sym, color:s.color, id: r+s.sym+'-'+d});
+        }
+      }
+    }
+    return deck;
+  }
+
+  function shuffle(arr){
+    for(let i=arr.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [arr[i],arr[j]]=[arr[j],arr[i]];
+    }
+    return arr;
+  }
+
+  function sortHand(cards){
+    return cards.slice().sort((a,b)=> RANK_VALUE[a.rank]-RANK_VALUE[b.rank]);
+  }
+
+  function makePlayer(name, isHuman){
+    return { name, isHuman, hand:[], faceup:[], facedown:[], out:false };
+  }
+
+  function newGame(numOpponents){
+    const numPlayers = numOpponents + 1;
+    const deck = shuffle(buildDeck(numPlayers)); // 1 deck per player, matches house ratio
+    const players = [makePlayer('You', true)];
+    for(let i=0;i<numOpponents;i++) players.push(makePlayer('Player '+(i+2), false));
+
+    for(const p of players){ for(let i=0;i<4;i++) p.facedown.push(deck.pop()); }
+    for(const p of players){ for(let i=0;i<4;i++) p.faceup.push(deck.pop()); }
+    for(const p of players){ for(let i=0;i<12;i++) p.hand.push(deck.pop()); p.hand = sortHand(p.hand); }
+
+    state = {
+      players,
+      pile: [],
+      leftover: deck,   // now a live draw pile
+      turn: 0,
+      selected: [],
+      message: 'Your move — throw any card to start the pile.',
+      over: false,
+      winner: null
+    };
+    render();
+  }
+
+  // ---- phase / pool helpers ----
+  function poolCards(player){
+    return player.hand.concat(player.faceup);
+  }
+  function phaseOf(player){
+    if(player.hand.length>0 || player.faceup.length>0) return 'pool';
+    if(player.facedown.length>0) return 'facedown';
+    return 'done';
+  }
+  function poolActive(player){
+    return player.hand.length>0 || player.faceup.length>0;
+  }
+  function facedownActive(player){
+    // face-down cards unlock as soon as the 4 face-up cards are gone —
+    // no need to wait for the hand to empty too.
+    return player.faceup.length===0 && player.facedown.length>0;
+  }
+  function topRankValue(){
+    if(state.pile.length===0) return null;
+    return RANK_VALUE[state.pile[state.pile.length-1].rank];
+  }
+  function canPlayRank(rank){
+    if(rank==='10') return true;
+    if(state.pile.length===0) return true;
+    return RANK_VALUE[rank] <= topRankValue();
+  }
+  function legalPoolRanks(player){
+    const ranks = new Set(poolCards(player).map(c=>c.rank));
+    return [...ranks].filter(canPlayRank);
+  }
+
+  function checkBurn(){
+    if(state.pile.length===0) return false;
+    const last = state.pile[state.pile.length-1];
+    if(last.rank==='10') return true;
+    if(state.pile.length>=4){
+      const lastFour = state.pile.slice(-4);
+      if(lastFour.every(c=>c.rank===last.rank)) return true;
+    }
+    return false;
+  }
+
+  function doBurn(playerName, reasonTen){
+    state.pile = [];
+    state.message = playerName + (reasonTen? ' burned the pile with a 10 — goes again.' : ' burned the pile with four of a kind — goes again.');
+  }
+
+  function playCards(playerIdx, cards){
+    const player = state.players[playerIdx];
+    for(const c of cards){
+      let idx = player.hand.findIndex(x=>x.id===c.id);
+      if(idx>-1){ player.hand.splice(idx,1); continue; }
+      idx = player.faceup.findIndex(x=>x.id===c.id);
+      if(idx>-1){ player.faceup.splice(idx,1); }
+    }
+    for(const c of cards) state.pile.push(c);
+    checkOut(player);
+  }
+
+  function checkOut(player){
+    if(player.hand.length===0 && player.faceup.length===0 && player.facedown.length===0){
+      player.out = true;
+    }
+  }
+
+  function pickUpPile(playerIdx){
+    const player = state.players[playerIdx];
+    player.hand = sortHand(player.hand.concat(state.pile));
+    state.pile = [];
+    state.message = player.name + ' had no draw pile left and couldn\'t play — picked up the pile and goes again.';
+  }
+
+  // ---- the new draw-from-deck mechanic ----
+  function doDrawFromDeck(playerIdx){
+    const player = state.players[playerIdx];
+    if(state.leftover.length===0){
+      pickUpPile(playerIdx);
+      return { burned:false, pickedUp:true };
+    }
+    const drawn = state.leftover.pop();
+    if(canPlayRank(drawn.rank)){
+      state.pile.push(drawn);
+      state.message = player.name+' drew the '+drawn.rank+' — plays it straight onto the pile.';
+      if(checkBurn()){ doBurn(player.name, drawn.rank==='10'); return { burned:true, pickedUp:false }; }
+      return { burned:false, pickedUp:false };
+    } else {
+      player.hand = player.hand.concat(state.pile);
+      state.pile = [drawn];
+      const matches = player.hand.filter(c=>c.rank===drawn.rank);
+      if(matches.length>0){
+        player.hand = player.hand.filter(c=>c.rank!==drawn.rank);
+        state.pile = state.pile.concat(matches);
+      }
+      player.hand = sortHand(player.hand);
+      state.message = player.name+' drew the '+drawn.rank+' — too high! Picks up the pile; the '+drawn.rank+' starts a new one'+(matches.length? ' with '+matches.length+' matching card'+(matches.length>1?'s':'')+' from hand.':'.')+' Goes again.';
+      if(checkBurn()){ doBurn(player.name, drawn.rank==='10'); return { burned:true, pickedUp:true }; }
+      return { burned:false, pickedUp:true };
+    }
+  }
+
+  function advanceTurn(){
+    let next = state.turn;
+    for(let i=0;i<state.players.length;i++){
+      next = (next+1) % state.players.length;
+      if(!state.players[next].out) break;
+    }
+    state.turn = next;
+  }
+
+  function computeRoundScores(){
+    const scores = {};
+    for(const p of state.players){
+      let pts = 0;
+      const remaining = p.hand.concat(p.faceup).concat(p.facedown);
+      for(const c of remaining) pts += pointValue(c.rank);
+      scores[p.name] = pts;
+    }
+    return scores;
+  }
+
+  function checkWin(){
+    // the game ends the instant any single player clears hand + face-up + face-down
+    const winner = state.players.find(p=>p.out);
+    if(winner && !state.over){
+      state.over = true;
+      state.winner = winner;
+      state.roundScores = computeRoundScores();
+      for(const p of state.players){
+        cumulativeScores[p.name] = (cumulativeScores[p.name]||0) + state.roundScores[p.name];
+      }
+      saveCumulative(cumulativeScores);
+      return true;
+    }
+    return false;
+  }
+
+  // ---------- ONLINE MULTIPLAYER (peer-to-peer via PeerJS) ----------
+  function makeRoomCode(){
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let s = '';
+    for(let i=0;i<4;i++) s += letters[Math.floor(Math.random()*letters.length)];
+    return 'TENS'+s;
+  }
+
+  function filteredStateFor(seatIdx){
+    return {
+      turn: state.turn,
+      pile: state.pile,
+      leftoverCount: state.leftover.length,
+      message: state.message,
+      over: state.over,
+      winnerSeat: state.winner ? state.players.indexOf(state.winner) : null,
+      roundScores: state.roundScores || null,
+      players: state.players.map((p,i)=>({
+        name: p.name,
+        out: p.out,
+        faceup: p.faceup,
+        facedownCount: p.facedown.length,
+        handCount: p.hand.length,
+        hand: i===seatIdx ? p.hand : undefined
+      }))
+    };
+  }
+
+  function syncPeers(isStart){
+    for(const conn of guestConns){
+      if(!conn.open) continue;
+      try{
+        conn.send({ type: isStart? 'start':'state', mySeat: conn.seatIdx, state: filteredStateFor(conn.seatIdx) });
+      }catch(e){}
+    }
+  }
+
+  function dummyCards(n){
+    const arr = [];
+    for(let i=0;i<n;i++) arr.push({rank:'?', suit:'', color:'black', id:'hidden-'+i});
+    return arr;
+  }
+
+  function rebuildStateFromNetwork(ns){
+    const prevSelected = (state && state.selected) ? state.selected : [];
+    const players = ns.players.map(p=>({
+      name: p.name,
+      isHuman: true,
+      out: p.out,
+      faceup: p.faceup,
+      facedown: dummyCards(p.facedownCount),
+      hand: p.hand ? p.hand : dummyCards(p.handCount)
+    }));
+    const mine = players[mySeat];
+    const stillSelected = mine ? prevSelected.filter(id => mine.hand.concat(mine.faceup).some(c=>c.id===id)) : [];
+    state = {
+      players,
+      pile: ns.pile,
+      leftover: dummyCards(ns.leftoverCount),
+      turn: ns.turn,
+      selected: stillSelected,
+      message: ns.message,
+      over: ns.over,
+      winner: ns.winnerSeat!=null ? players[ns.winnerSeat] : null,
+      roundScores: ns.roundScores || null
+    };
+  }
+
+  function applyRoundScoresLocally(){
+    if(!state.roundScores || roundScored) return;
+    for(const p of state.players){
+      cumulativeScores[p.name] = (cumulativeScores[p.name]||0) + (state.roundScores[p.name]||0);
+    }
+    saveCumulative(cumulativeScores);
+    roundScored = true;
+  }
+
+  // ---- host: handling a message from a connected guest ----
+  function finalizeHostTurn(drawResult, burnCandidate){
+    if(checkWin()){ render(); syncPeers(); return; }
+    if(drawResult && (drawResult.burned || drawResult.pickedUp)){ render(); syncPeers(); return; }
+    if(!drawResult && burnCandidate!=null && checkBurn()){
+      doBurn(state.players[state.turn].name, burnCandidate==='10');
+      render(); syncPeers();
+      return;
+    }
+    advanceTurn();
+    render();
+    syncPeers();
+  }
+
+  function handleGuestMessage(seatIdx, msg){
+    if(!state || state.over) return;
+    if(state.turn !== seatIdx) return; // ignore anything out of turn
+    const player = state.players[seatIdx];
+
+    if(msg.type==='play'){
+      const pool = poolCards(player);
+      const cards = msg.cardIds.map(id=>pool.find(c=>c.id===id)).filter(Boolean);
+      if(cards.length===0) return;
+      const rank = cards[0].rank;
+      if(!cards.every(c=>c.rank===rank) || !canPlayRank(rank)) return;
+      playCards(seatIdx, cards);
+      state.message = player.name+' played the '+rank+(cards.length>1?' ×'+cards.length:'')+'.';
+      finalizeHostTurn(null, rank);
+
+    } else if(msg.type==='draw'){
+      if(legalPoolRanks(player).length>0) return; // must play if legal
+      const result = doDrawFromDeck(seatIdx);
+      finalizeHostTurn(result, null);
+
+    } else if(msg.type==='flip'){
+      if(!facedownActive(player)) return;
+      const i = Math.floor(Math.random()*player.facedown.length);
+      const card = player.facedown.splice(i,1)[0];
+      if(canPlayRank(card.rank)){
+        state.pile.push(card);
+        const extra = autoPlayHandMatches(player, card.rank);
+        checkOut(player);
+        state.message = player.name+' flips a facedown card — the '+card.rank+'. Legal!'+(extra? ' Plus '+extra+' matching card'+(extra>1?'s':'')+' from hand.':'');
+        finalizeHostTurn(null, card.rank);
+      } else {
+        player.hand = sortHand(player.hand.concat(state.pile).concat([card]));
+        state.pile = [];
+        state.message = player.name+' flips the '+card.rank+' — too high, picks up the pile and goes again.';
+        render();
+        syncPeers();
+      }
+    }
+  }
+
+  function waitForPeerLib(onReady){
+    if(typeof Peer !== 'undefined'){ onReady(); return; }
+    let waited = 0;
+    const iv = setInterval(()=>{
+      waited += 200;
+      if(typeof Peer !== 'undefined'){
+        clearInterval(iv);
+        onReady();
+      } else if(waited >= 6000){
+        clearInterval(iv);
+        alert('Could not load the networking library (PeerJS). Check your internet connection and try again.');
+      }
+    }, 200);
+  }
+
+  function startHosting(){
+    netMode = 'host';
+    mySeat = 0;
+    guestConns = [];
+    const statusEl = document.getElementById('host-status');
+    const retryBtn = document.getElementById('host-retry-btn');
+    retryBtn.style.display = 'none';
+    statusEl.textContent = 'Loading networking library…';
+    statusEl.className = 'conn-status';
+    document.getElementById('host-code').textContent = '…';
+
+    waitForPeerLib(()=>{
+      statusEl.textContent = 'Connecting to room server…';
+      const code = makeRoomCode();
+      if(peer){ try{ peer.destroy(); }catch(e){} }
+      peer = new Peer(code, { debug: 1 });
+      let opened = false;
+      const openTimeout = setTimeout(()=>{
+        if(!opened){
+          console.warn('[TENS] peer.open never fired within 10s — likely blocked by network/firewall');
+          statusEl.textContent = "⚠️ Couldn't reach the connection server. This usually means the WiFi/network is blocking WebRTC. Try mobile data or a different network.";
+          statusEl.className = 'conn-status error';
+          retryBtn.style.display = 'block';
+        }
+      }, 10000);
+      peer.on('open', id=>{
+        opened = true;
+        clearTimeout(openTimeout);
+        document.getElementById('host-code').textContent = id.replace('TENS','');
+        const link = location.origin + location.pathname + '?join=' + id;
+        document.getElementById('share-link').value = link;
+        statusEl.textContent = 'Connected — room is live.';
+        statusEl.className = 'conn-status ok';
+        retryBtn.style.display = 'none';
+        updateHostLobbyUI();
+      });
+      peer.on('connection', conn=>{
+        conn.on('open', ()=>{
+          if(guestConns.length>=3){ conn.send({type:'full'}); conn.close(); return; }
+          conn.seatIdx = guestConns.length+1;
+          guestConns.push(conn);
+          updateHostLobbyUI();
+          conn.on('data', msg=> handleGuestMessage(conn.seatIdx, msg));
+          conn.on('close', ()=>{
+            guestConns = guestConns.filter(c=>c!==conn);
+            updateHostLobbyUI();
+          });
+        });
+      });
+      peer.on('error', err=>{
+        clearTimeout(openTimeout);
+        console.error('[TENS] peer error', err);
+        if(err.type==='unavailable-id'){
+          startHosting(); // room code collision — extremely rare, just retry with a new code
+        } else {
+          statusEl.textContent = '⚠️ Connection error: '+err.type;
+          statusEl.className = 'conn-status error';
+          retryBtn.style.display = 'block';
+        }
+      });
+    });
+  }
+
+  function updateHostLobbyUI(){
+    const list = document.getElementById('lobby-players');
+    let html = '<div class="lobby-row">Player 1 — you (host)</div>';
+    guestConns.forEach((c,i)=>{ html += '<div class="lobby-row">Player '+(i+2)+' — connected</div>'; });
+    list.innerHTML = html;
+    document.getElementById('host-start-btn').disabled = guestConns.length<1;
+  }
+
+  function hostStartGame(){
+    if(guestConns.length<1) return;
+    const numPlayers = guestConns.length+1;
+    const deck = shuffle(buildDeck(numPlayers));
+    const players = [];
+    for(let i=0;i<numPlayers;i++) players.push(makePlayer('Player '+(i+1), true));
+    for(const p of players){ for(let i=0;i<4;i++) p.facedown.push(deck.pop()); }
+    for(const p of players){ for(let i=0;i<4;i++) p.faceup.push(deck.pop()); }
+    for(const p of players){ for(let i=0;i<12;i++) p.hand.push(deck.pop()); p.hand = sortHand(p.hand); }
+    state = { players, pile:[], leftover:deck, turn:0, selected:[], message:'Player 1 — throw any card to start the pile.', over:false, winner:null };
+    showScreen('game');
+    render();
+    syncPeers(true);
+  }
+
+  function joinGame(code){
+    netMode = 'guest';
+    const statusEl = document.getElementById('guest-status');
+    statusEl.textContent = 'Loading networking library…';
+    statusEl.className = 'conn-status';
+    waitForPeerLib(()=>{
+      statusEl.textContent = 'Connecting to room server…';
+      if(peer){ try{ peer.destroy(); }catch(e){} }
+      peer = new Peer({ debug: 1 });
+      let opened = false;
+      const openTimeout = setTimeout(()=>{
+        if(!opened){
+          console.warn('[TENS] peer.open never fired within 10s — likely blocked by network/firewall');
+          statusEl.textContent = "⚠️ Couldn't reach the connection server. This usually means the WiFi/network is blocking WebRTC. Try mobile data or a different network.";
+          statusEl.className = 'conn-status error';
+        }
+      }, 10000);
+      peer.on('open', ()=>{
+        opened = true;
+        clearTimeout(openTimeout);
+        statusEl.textContent = 'Connecting to room '+code.replace('TENS','')+'…';
+        hostConn = peer.connect(code);
+        const connTimeout = setTimeout(()=>{
+          statusEl.textContent = "⚠️ Couldn't reach that room. Double-check the code with the host and try again.";
+          statusEl.className = 'conn-status error';
+        }, 8000);
+        hostConn.on('open', ()=>{ clearTimeout(connTimeout); showScreen('guest-waiting'); });
+        hostConn.on('error', err=>{
+          clearTimeout(connTimeout);
+          console.error('[TENS] connection error', err);
+          statusEl.textContent = '⚠️ Could not reach that room: '+err.type;
+          statusEl.className = 'conn-status error';
+        });
+        hostConn.on('data', msg=> handleHostMessage(msg));
+        hostConn.on('close', ()=>{ if(!state || !state.over) alert('Lost connection to the host.'); });
+      });
+      peer.on('error', err=>{
+        clearTimeout(openTimeout);
+        console.error('[TENS] peer error', err);
+        statusEl.textContent = '⚠️ Could not connect: '+err.type;
+        statusEl.className = 'conn-status error';
+      });
+    });
+  }
+
+  function handleHostMessage(msg){
+    if(msg.type==='full'){ alert('That room is full (max 4 players).'); return; }
+    if(msg.type==='start' || msg.type==='state'){
+      const isFirstStart = msg.type==='start';
+      mySeat = msg.mySeat;
+      if(isFirstStart) roundScored = false;
+      rebuildStateFromNetwork(msg.state);
+      awaitingAck = false;
+      if(isFirstStart) showScreen('game');
+      if(state.over) applyRoundScoresLocally();
+      render();
+    }
+  }
+
+
+  // ---------- HUMAN ACTIONS ----------
+  function humanToggleSelect(cardId){
+    const player = state.players[mySeat];
+    if(!poolActive(player)) return;
+    const pool = poolCards(player);
+    const idx = state.selected.indexOf(cardId);
+    if(idx>-1){ state.selected.splice(idx,1); render(); return; }
+    const clicked = pool.find(c=>c.id===cardId);
+    if(!clicked) return;
+    if(state.selected.length>0){
+      const firstCard = pool.find(c=>c.id===state.selected[0]);
+      if(firstCard && firstCard.rank!==clicked.rank){ state.selected = [cardId]; render(); return; }
+    }
+    state.selected.push(cardId);
+    render();
+  }
+
+  function humanPlaySelected(){
+    if(state.turn!==mySeat || state.over || awaitingAck) return;
+    const player = state.players[mySeat];
+    if(!poolActive(player)) return;
+    const pool = poolCards(player);
+    const selectedCards = state.selected.map(id=>pool.find(c=>c.id===id)).filter(Boolean);
+    if(selectedCards.length===0) return;
+    const rank = selectedCards[0].rank;
+    if(!canPlayRank(rank)){
+      state.message = "That's higher than the pile — you can't play it.";
+      render(); return;
+    }
+
+    if(netMode==='guest'){
+      awaitingAck = true;
+      hostConn.send({ type:'play', cardIds: selectedCards.map(c=>c.id) });
+      state.selected = [];
+      render();
+      return;
+    }
+
+    playCards(mySeat, selectedCards);
+    state.selected = [];
+    state.message = player.name+' played the '+rank+(selectedCards.length>1? ' ×'+selectedCards.length:'')+'.';
+    if(checkWin()){ render(); if(netMode==='host') syncPeers(); return; }
+    if(checkBurn()){
+      doBurn(player.name, rank==='10');
+      render();
+      if(netMode==='host') syncPeers();
+      return;
+    }
+    advanceTurn();
+    render();
+    if(netMode==='host') syncPeers();
+    if(netMode==='offline') setTimeout(runBotTurnLoop, 700);
+  }
+
+  function humanDraw(){
+    if(state.turn!==mySeat || state.over || awaitingAck) return;
+    const player = state.players[mySeat];
+    if(!poolActive(player)) return;
+    if(legalPoolRanks(player).length>0) return; // must play if a legal play exists
+
+    if(netMode==='guest'){
+      awaitingAck = true;
+      hostConn.send({ type:'draw' });
+      render();
+      return;
+    }
+
+    state.selected = [];
+    const result = doDrawFromDeck(mySeat);
+    if(checkWin()){ render(); if(netMode==='host') syncPeers(); return; }
+    if(result.burned || result.pickedUp){ render(); if(netMode==='host') syncPeers(); return; }
+    advanceTurn();
+    render();
+    if(netMode==='host') syncPeers();
+    if(netMode==='offline') setTimeout(runBotTurnLoop, 700);
+  }
+
+  function autoPlayHandMatches(player, rank){
+    const matches = player.hand.filter(c=>c.rank===rank);
+    if(matches.length>0){
+      player.hand = player.hand.filter(c=>c.rank!==rank);
+      state.pile = state.pile.concat(matches);
+    }
+    return matches.length;
+  }
+
+  function humanFlipFacedown(){
+    if(state.turn!==mySeat || state.over || awaitingAck) return;
+    const player = state.players[mySeat];
+    if(!facedownActive(player)) return;
+
+    if(netMode==='guest'){
+      awaitingAck = true;
+      hostConn.send({ type:'flip' });
+      render();
+      return;
+    }
+
+    const i = Math.floor(Math.random()*player.facedown.length);
+    const card = player.facedown.splice(i,1)[0];
+    if(canPlayRank(card.rank)){
+      state.pile.push(card);
+      const extra = autoPlayHandMatches(player, card.rank);
+      checkOut(player);
+      state.message = 'You flipped the '+card.rank+' — legal! It\'s in the pile'+(extra? ', plus '+extra+' matching card'+(extra>1?'s':'')+' from your hand.':'.');
+      if(checkWin()){ render(); if(netMode==='host') syncPeers(); return; }
+      if(checkBurn()){ doBurn('You', card.rank==='10'); render(); if(netMode==='host') syncPeers(); return; }
+      advanceTurn();
+      render();
+      if(netMode==='host') syncPeers();
+      if(netMode==='offline') setTimeout(runBotTurnLoop, 700);
+    } else {
+      player.hand = sortHand(player.hand.concat([card]).concat(state.pile));
+      state.pile = [];
+      state.message = 'You flipped the '+card.rank+' — too high! Picked up everything — you go again.';
+      render(); // turn stays with you; you're back in the hand/face-up pool
+      if(netMode==='host') syncPeers();
+    }
+  }
+
+
+  // ---------- BOT LOGIC ----------
+  function botChooseMove(player){
+    const pool = poolCards(player);
+    const byRank = {};
+    for(const c of pool){ (byRank[c.rank] = byRank[c.rank]||[]).push(c); }
+    const legalRanks = Object.keys(byRank).filter(canPlayRank);
+    if(legalRanks.length===0) return null;
+
+    // 1. Burn-chase: if the pile's top 3 cards are already the same rank and the
+    //    bot holds a legal 4th, play it to trigger the four-of-a-kind burn.
+    if(state.pile.length>=3){
+      const lastThree = state.pile.slice(-3);
+      if(lastThree.every(c=>c.rank===lastThree[0].rank)){
+        const chaseRank = lastThree[0].rank;
+        if(byRank[chaseRank] && canPlayRank(chaseRank)){
+          return { rank: chaseRank, cards: byRank[chaseRank] };
+        }
+      }
+    }
+
+    const nonTen = legalRanks.filter(r=>r!=='10');
+    // 2. Save 10s for when nothing else works — only fall back to a ten if every
+    //    other legal rank has been ruled out.
+    const pool2 = nonTen.length>0 ? nonTen : ['10'];
+
+    // 3. Prefer the biggest matching group first (sheds fastest), then the
+    //    highest rank (dump awkward high cards while the pile still allows it).
+    pool2.sort((a,b)=>{
+      const groupDiff = byRank[b].length - byRank[a].length;
+      if(groupDiff!==0) return groupDiff;
+      return RANK_VALUE[b]-RANK_VALUE[a];
+    });
+
+    // 4. Keep a lone low card (A/2/3) in reserve as a safety net if a real
+    //    alternative exists — only spend it when it's the only legal move.
+    const isLowSingleton = (r)=> RANK_VALUE[r]<=3 && byRank[r].length===1;
+    let chosenRank = pool2.find(r=> !isLowSingleton(r));
+    if(!chosenRank) chosenRank = pool2[0];
+
+    return { rank: chosenRank, cards: byRank[chosenRank] };
+  }
+
+  function runBotTurnLoop(){
+    if(state.over) return;
+    const idx = state.turn;
+    if(idx===0){ render(); return; }
+    const player = state.players[idx];
+    if(player.out){ advanceTurn(); return setTimeout(runBotTurnLoop, 300); }
+
+    const phase = phaseOf(player);
+    if(phase==='facedown'){
+      const i = Math.floor(Math.random()*player.facedown.length);
+      const card = player.facedown.splice(i,1)[0];
+      if(canPlayRank(card.rank)){
+        state.pile.push(card);
+        const extra = autoPlayHandMatches(player, card.rank);
+        checkOut(player);
+        state.message = player.name+' flips a facedown card — the '+card.rank+'. Legal!'+(extra? ' Plus '+extra+' matching card'+(extra>1?'s':'')+' from hand.':'');
+        if(checkWin()){ render(); return; }
+        if(checkBurn()){ doBurn(player.name, card.rank==='10'); render(); return setTimeout(runBotTurnLoop, 800); }
+        advanceTurn();
+        render();
+        return setTimeout(runBotTurnLoop, 800);
+      } else {
+        player.hand = player.hand.concat(state.pile);
+        state.pile = [];
+        state.message = player.name+' flips the '+card.rank+' — too high, picks up the pile and goes again.';
+        render();
+        return setTimeout(runBotTurnLoop, 800); // turn stays with this bot
+      }
+    }
+
+    if(phase==='done'){ advanceTurn(); return setTimeout(runBotTurnLoop, 300); }
+
+    const move = botChooseMove(player);
+    if(!move){
+      const result = doDrawFromDeck(idx);
+      if(checkWin()){ render(); return; }
+      if(result.burned || result.pickedUp){ render(); return setTimeout(runBotTurnLoop, 800); } // goes again
+      advanceTurn();
+      render();
+      return setTimeout(runBotTurnLoop, 800);
+    }
+    playCards(idx, move.cards);
+    state.message = player.name+' plays the '+move.rank+(move.cards.length>1?' ×'+move.cards.length:'')+'.';
+    if(checkWin()){ render(); return; }
+    if(checkBurn()){
+      doBurn(player.name, move.rank==='10');
+      render();
+      return setTimeout(runBotTurnLoop, 800);
+    }
+    advanceTurn();
+    render();
+    return setTimeout(runBotTurnLoop, 800);
+  }
+
+  // ---------- RENDER ----------
+  // ---- turn alert: banner, tab title, and a beep on the moment it becomes your turn ----
+  let wasMyTurn = false;
+  function beep(){
+    try{
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 740;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.35);
+      osc.start(); osc.stop(ctx.currentTime+0.35);
+    }catch(e){}
+  }
+  function updateTurnAlert(myTurnNow){
+    const banner = document.getElementById('turn-banner');
+    banner.classList.toggle('show', myTurnNow);
+    if(myTurnNow && !wasMyTurn){
+      document.title = '🟢 Your Turn — TENS';
+      if(netMode!=='offline') beep();
+    } else if(!myTurnNow){
+      document.title = 'TENS';
+    }
+    wasMyTurn = myTurnNow;
+  }
+
+  function render(){
+    if(state.over){ showGameOver(); return; }
+
+    const oppEl = document.getElementById('opponents');
+    oppEl.innerHTML='';
+    for(let i=0;i<state.players.length;i++){
+      if(i===mySeat) continue;
+      const p = state.players[i];
+      const div = document.createElement('div');
+      div.className = 'opp'+(state.turn===i? ' active-turn':'');
+      let faceupHtml = p.faceup.map(c=>'<div class="mini-card face '+(c.color==='red'?'red-suit':'black-suit')+'">'+c.rank+'</div>').join('');
+      let facedownHtml = '';
+      for(let k=0;k<p.facedown.length;k++) facedownHtml += '<div class="mini-card"></div>';
+      div.innerHTML = '<div class="opp-name">'+p.name+(p.out? ' 🏆':'')+'</div>'+
+        '<div class="opp-zone">'+facedownHtml+'</div>'+
+        '<div class="opp-zone">'+faceupHtml+'</div>'+
+        '<div class="opp-count">hand: '+p.hand.length+'</div>';
+      oppEl.appendChild(div);
+    }
+
+    const pileWrap = document.getElementById('pile-wrap');
+    if(state.pile.length===0){
+      pileWrap.innerHTML = '<div class="pile-empty">empty<br>pile</div>';
+    } else {
+      const top = state.pile[state.pile.length-1];
+      let runCount = 1;
+      for(let i=state.pile.length-2; i>=0; i--){
+        if(state.pile[i].rank===top.rank) runCount++; else break;
+      }
+      const cardHtml = '<div class="pile-card '+(top.color==='red'?'red-suit':'black-suit')+'"><div class="rank">'+top.rank+'</div><div class="suit">'+top.suit+'</div></div>';
+      const countHtml = runCount>1 ? '<div class="pile-count">×'+runCount+'</div>' : '';
+      pileWrap.innerHTML = cardHtml + countHtml;
+    }
+    document.getElementById('pile-info').innerHTML = state.pile.length+' card'+(state.pile.length===1?'':'s')+' in pile'+(state.pile.length? ' — play <b>'+state.pile[state.pile.length-1].rank+'</b> or lower (10s always OK)':'');
+    document.getElementById('deck-info').textContent = 'Deck: '+state.leftover.length+' card'+(state.leftover.length===1?'':'s')+' left to draw';
+
+    document.getElementById('message').textContent = state.message + (netMode==='guest' && awaitingAck ? ' (waiting on host…)' : '');
+
+    const human = state.players[mySeat];
+    const poolAct = poolActive(human);
+    const fdAct = facedownActive(human);
+    const isHumanTurn = state.turn===mySeat && !state.over;
+    const canAct = isHumanTurn && !(netMode==='guest' && awaitingAck);
+
+    updateTurnAlert(canAct);
+
+    document.getElementById('facedown-section').style.display = fdAct ? 'block':'none';
+    document.getElementById('faceup-section').style.display = human.faceup.length>0 ? 'block':'none';
+    document.getElementById('hand-section').style.display = human.hand.length>0 ? 'block':'none';
+
+    const fdRow = document.getElementById('facedown-row');
+    fdRow.innerHTML='';
+    if(fdAct){
+      human.facedown.forEach(()=>{
+        const d = document.createElement('div');
+        d.className = 'pcard facedown-back';
+        d.onclick = ()=> { if(canAct) humanFlipFacedown(); };
+        fdRow.appendChild(d);
+      });
+    }
+
+    const fuRow = document.getElementById('faceup-row');
+    fuRow.innerHTML='';
+    human.faceup.forEach(c=>{
+      const el = document.createElement('div');
+      const selected = state.selected.includes(c.id);
+      const clickable = poolAct && canAct;
+      el.className = 'pcard '+(c.color==='red'?'red-suit':'black-suit')+(selected?' selected':'')+(!clickable?' disabled':'');
+      el.innerHTML = '<div class="rank">'+c.rank+'</div><div class="suit">'+c.suit+'</div>';
+      if(clickable) el.onclick = ()=> humanToggleSelect(c.id);
+      fuRow.appendChild(el);
+    });
+
+    const handRow = document.getElementById('hand-row');
+    handRow.innerHTML='';
+    human.hand.forEach(c=>{
+      const el = document.createElement('div');
+      const selected = state.selected.includes(c.id);
+      const clickable = poolAct && canAct;
+      el.className = 'pcard '+(c.color==='red'?'red-suit':'black-suit')+(selected?' selected':'')+(!clickable?' disabled':'');
+      el.innerHTML = '<div class="rank">'+c.rank+'</div><div class="suit">'+c.suit+'</div>';
+      if(clickable) el.onclick = ()=> humanToggleSelect(c.id);
+      handRow.appendChild(el);
+    });
+
+    const playBtn = document.getElementById('play-btn');
+    let playValid = false;
+    if(poolAct && canAct && state.selected.length>0){
+      const pool = poolCards(human);
+      const first = pool.find(x=>x.id===state.selected[0]);
+      playValid = first && canPlayRank(first.rank);
+    }
+    playBtn.disabled = !playValid;
+    playBtn.style.display = poolAct ? 'block' : 'none';
+
+    const drawBtn = document.getElementById('draw-btn');
+    if(poolAct){
+      drawBtn.style.display = 'block';
+      const stuck = canAct && legalPoolRanks(human).length===0;
+      drawBtn.disabled = !stuck;
+      drawBtn.textContent = state.leftover.length>0 ? 'Draw from Deck' : 'Pick Up Pile (deck empty)';
+    } else {
+      drawBtn.style.display = 'none';
+    }
+  }
+
+  function showGameOver(){
+    document.getElementById('gameover').style.display='flex';
+    const won = state.winner;
+    const iWon = won && state.players.indexOf(won)===mySeat;
+    document.getElementById('go-title').textContent = iWon ? 'You Win!' : (won ? won.name+' Wins' : 'Game Over');
+    document.getElementById('go-text').textContent = iWon ? 'You cleared your hand, face-up, and face-down cards first.' : 'Better luck next round.';
+
+    let rows = '<table class="score-table"><tr><th>Player</th><th>This game</th><th>Total</th></tr>';
+    state.players.forEach((p,i)=>{
+      const pts = state.roundScores ? (state.roundScores[p.name]||0) : 0;
+      const total = cumulativeScores[p.name]||0;
+      rows += '<tr><td>'+p.name+(i===mySeat?' (you)':'')+'</td><td>'+pts+'</td><td>'+total+'</td></tr>';
+    });
+    rows += '</table>';
+    document.getElementById('go-scores').innerHTML = rows;
+  }
+
+  document.getElementById('play-btn').onclick = humanPlaySelected;
+  document.getElementById('draw-btn').onclick = humanDraw;
+
+  function showScreen(id){
+    ['mode-select','setup','online-menu','host-lobby','guest-join','guest-waiting','game'].forEach(s=>{
+      document.getElementById(s).style.display = (s===id) ? 'flex' : 'none';
+    });
+  }
+
+  function teardownConnection(){
+    guestConns.forEach(c=>{ try{ c.close(); }catch(e){} });
+    guestConns = [];
+    if(hostConn){ try{ hostConn.close(); }catch(e){} hostConn = null; }
+    if(peer){ try{ peer.destroy(); }catch(e){} peer = null; }
+    netMode = 'offline';
+    mySeat = 0;
+    awaitingAck = false;
+    roundScored = false;
+    wasMyTurn = false;
+    document.title = 'TENS';
+  }
+
+  document.getElementById('replay-btn').onclick = ()=>{
+    document.getElementById('gameover').style.display='none';
+    teardownConnection();
+    showScreen('mode-select');
+  };
+  document.getElementById('reset-scores-btn').onclick = ()=>{
+    cumulativeScores = {};
+    saveCumulative(cumulativeScores);
+    if(state && state.over) showGameOver();
+  };
+
+  // ---- mode select ----
+  document.getElementById('vs-computer-btn').onclick = ()=> showScreen('setup');
+  document.getElementById('play-online-btn').onclick = ()=> showScreen('online-menu');
+  document.getElementById('setup-back-btn').onclick = ()=> showScreen('mode-select');
+  document.getElementById('online-back-btn').onclick = ()=> showScreen('mode-select');
+
+  let chosenOpponents = 1;
+  document.querySelectorAll('#opp-count-row .opt-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      document.querySelectorAll('#opp-count-row .opt-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      chosenOpponents = parseInt(btn.dataset.n,10);
+    };
+  });
+
+  document.getElementById('start-btn').onclick = ()=>{
+    netMode = 'offline';
+    mySeat = 0;
+    showScreen('game');
+    newGame(chosenOpponents);
+    if(state.turn!==0) setTimeout(runBotTurnLoop, 700);
+  };
+
+  // ---- online: host ----
+  document.getElementById('host-game-btn').onclick = ()=>{
+    showScreen('host-lobby');
+    document.getElementById('lobby-players').innerHTML = '<div class="lobby-row">Player 1 — you (host)</div>';
+    startHosting();
+  };
+  document.getElementById('host-lobby-back-btn').onclick = ()=>{
+    teardownConnection();
+    showScreen('online-menu');
+  };
+  document.getElementById('host-start-btn').onclick = hostStartGame;
+  document.getElementById('host-retry-btn').onclick = startHosting;
+  document.getElementById('copy-link-btn').onclick = ()=>{
+    const input = document.getElementById('share-link');
+    input.select();
+    input.setSelectionRange(0, 99999);
+    try{
+      navigator.clipboard.writeText(input.value);
+      const btn = document.getElementById('copy-link-btn');
+      const old = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(()=>{ btn.textContent = old; }, 1500);
+    }catch(e){
+      document.execCommand('copy');
+    }
+  };
+
+  // ---- online: guest ----
+  document.getElementById('join-game-btn').onclick = ()=>{
+    document.getElementById('guest-status').textContent = '';
+    showScreen('guest-join');
+  };
+  document.getElementById('guest-back-btn').onclick = ()=> showScreen('online-menu');
+  document.getElementById('guest-waiting-back-btn').onclick = ()=>{
+    teardownConnection();
+    showScreen('online-menu');
+  };
+  document.getElementById('join-connect-btn').onclick = ()=>{
+    const raw = document.getElementById('join-code-input').value.trim().toUpperCase();
+    if(!raw) return;
+    const code = raw.startsWith('TENS') ? raw : 'TENS'+raw;
+    joinGame(code);
+  };
+
+  // ---- auto-join if the page was opened via a shared room link (?join=CODE) ----
+  const urlJoinCode = new URLSearchParams(location.search).get('join');
+  if(urlJoinCode){
+    showScreen('guest-join');
+    document.getElementById('join-code-input').value = urlJoinCode.replace('TENS','');
+    joinGame(urlJoinCode.startsWith('TENS') ? urlJoinCode : 'TENS'+urlJoinCode);
+  } else {
+    showScreen('mode-select');
+  }
+
+})();
+</script>
+</body>
+</html>
